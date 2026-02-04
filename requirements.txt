@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pymongo
+openai
+pydantic
+python-dotenv
+requests
+regex
