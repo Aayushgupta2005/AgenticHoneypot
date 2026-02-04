@@ -1,18 +1,40 @@
-
 from pymongo import MongoClient
-# from app.core.config import settings
+from pymongo.errors import ConnectionFailure
+from app.core.config import settings
+import sys
 
-class MongoDB:
-    def __init__(self):
-        self.client = None
-        self.db = None
+class Database:
+    client: MongoClient = None
+    db = None
 
     def connect(self):
-        # self.client = MongoClient(settings.MONGODB_URL)
-        # self.db = self.client[settings.DB_NAME]
-        pass
+        """Establishes the connection to MongoDB."""
+        if not self.client:
+            try:
+                print("🔌 Connecting to MongoDB...")
+                self.client = MongoClient(settings.MONGO_URI)
+                self.db = self.client[settings.DB_NAME]
+                
+                # Test the connection specifically
+                self.client.admin.command('ping')
+                print("✅ MongoDB Connection Successful!")
+                
+            except ConnectionFailure as e:
+                print(f"❌ MongoDB Connection Failed: {e}")
+                sys.exit(1) # Stop the app if DB fails
 
-    def get_db(self):
-        return self.db
+    def disconnect(self):
+        """Closes the connection."""
+        if self.client:
+            self.client.close()
+            print("🔌 MongoDB Connection Closed.")
 
-db = MongoDB()
+    def get_collection(self, collection_name):
+        """Helper to get a specific collection."""
+        if self.db is not None:
+            return self.db[collection_name]
+        else:
+            raise ConnectionError("Database not connected. Call connect() first.")
+
+# Create a global instance
+db_instance = Database()
