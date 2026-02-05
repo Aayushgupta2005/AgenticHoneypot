@@ -389,7 +389,7 @@ RULES:
 - Return valid JSON only - no explanations, no markdown, no code blocks
 
 OUTPUT FORMAT:
-{"employee_id": "value or null", "employee_number": "value or null", ...}
+{{"employee_id": "value or null", "employee_number": "value or null", ...}}
 
 CONVERSATION:
 {text}
