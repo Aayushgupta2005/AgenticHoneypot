@@ -5,17 +5,85 @@ import json
 import random
 from huggingface_hub import InferenceClient
 from huggingface_hub.errors import HfHubHTTPError
-from huggingface_hub import InferenceClient
-from huggingface_hub.errors import HfHubHTTPError
+import time
+
+class KeyManager:
+    """Manages pools of API keys for different tasks."""
+    def __init__(self):
+        self.pools = {
+            "scam": self._load_pool(settings.GROQ_KEYS_SCAM),
+            "gen": self._load_pool(settings.GROQ_KEYS_GEN),
+            "safe": self._load_pool(settings.GROQ_KEYS_SAFE),
+            "extraction": self._load_pool(settings.GROQ_KEYS_EXTRACTION),
+            "global": self._load_pool(settings.GROQ_KEYS_GLOBAL)
+        }
+        self.indices = {k: 0 for k in self.pools} 
+
+    def _load_pool(self, keys_str):
+        if not keys_str: return []
+        # Create clients for valid keys
+        return [Groq(api_key=k.strip()) for k in keys_str.split(",") if k.strip()]
+
+    def get_client(self, task="global"):
+        # Fallback to global if specific pool empty
+        pool = self.pools.get(task) or self.pools["global"]
+        if not pool: 
+            # If even global is empty, try to create one from legacy single key if needed, or raise
+            if settings.GROQ_API_KEY:
+                 return Groq(api_key=settings.GROQ_API_KEY)
+            raise Exception(f"No API Keys configured for task '{task}' or global pool!")
+        
+        idx = self.indices.get(task, 0)
+        return pool[idx % len(pool)]
+
+    def rotate(self, task="global"):
+        # Move to next key
+        print(f"🔄 [KeyManager] Rotating key for task: {task}")
+        self.indices[task] = self.indices.get(task, 0) + 1
+
 
 class LLMService:
     def __init__(self):
-        self.client = Groq(api_key=settings.GROQ_API_KEY)
+        self.key_manager = KeyManager()
         self.main_model = "openai/gpt-oss-20b" 
         self.fast_model = "openai/gpt-oss-20b"
 
-    def classify_scam(self, text: str) -> bool:
+    def _call_groq(self, task_name, create_func):
+        """
+        Generic wrapper to handle rotation and retries.
+        create_func: function that takes a client and returns result
+        """
+        max_retries = 3
+        last_error = None
         
+        for attempt in range(max_retries):
+            # Round-Robin: Rotate BEFORE getting the client to ensure distribution
+            # But ensure we don't skip keys excessively if we just rotated due to error.
+            # Actually, simplest is to just get client, then rotate index for NEXT time.
+            client = self.key_manager.get_client(task_name)
+            
+            # Prepare next key for the *next* call (Round Robin)
+            # We do this immediately so that subequent calls use different keys
+            if attempt == 0: 
+                 self.key_manager.rotate(task_name)
+
+            try:
+                return create_func(client)
+            except Exception as e:
+                start_time = time.time()
+                e_str = str(e).lower()
+                if "429" in e_str or "rate limit" in e_str:
+                    print(f"⚠️ [LLM] Rate Limit (429) for {task_name} on attempt {attempt+1}. Rotating key...")
+                    self.key_manager.rotate(task_name)
+                    time.sleep(0.5) 
+                    continue
+                else:
+                    print(f"❌ [LLM] Error: {e}")
+                    raise e
+                    
+        raise Exception(f"Max retries exceeded for {task_name}. Last error: {last_error}")
+
+    def classify_scam(self, text: str) -> bool:
         """
         Determines if the message is a scam attempt or safe.
         """
@@ -43,61 +111,23 @@ class LLMService:
         
         Respond with ONLY one word: "SCAM" or "SAFE".
         """
-        try:
-            response = self.client.chat.completions.create(
+        
+        def _request(client):
+            response = client.chat.completions.create(
                 model=self.fast_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0
             )
             data = response.choices[0].message.content.strip().upper()
             return "SCAM" in data
+
+        try:
+            return self._call_groq("scam", _request)
         except Exception as e:
             print(f"❌ LLM Classification Error: {e}")
             return True # Fail safe
 
-    # def classify_scam(self, text: str) -> bool:
-    #     """
-    #     Returns True if message is likely a scam.
-    #     Fail-safe: returns True if ALL keys fail.
-    #     """
-
-    #     HF_KEYS = [
-    #         settings.HG_KEY1,
-    #         settings.HG_KEY2,
-    #     ]
-
-    #     MODEL = "dima806/email-spam-detection-roberta"
-    #     THRESHOLD = 0.5
-
-    #     for key in HF_KEYS:
-    #         try:
-    #             client = InferenceClient(
-    #                 provider="hf-inference",
-    #                 api_key=key
-    #             )
-
-    #             result = client.text_classification(
-    #                 text,
-    #                 model=MODEL
-    #             )
-
-    #             # robust label search
-    #             scam_prob = next(
-    #                 (r.score for r in result if r.label.lower() == "spam"),
-    #                 0.0
-    #             )
-
-    #             return scam_prob > THRESHOLD
-
-    #         except HfHubHTTPError:
-    #             continue
-    #         except Exception:
-    #             continue   # don't auto-scam
-
-    #     # only if ALL keys failed
-    #     print("Failed to classify scam")
-    #     return True
-    def get_instruction_from_llm(self, state,message,objective):
+    def get_instruction_from_llm(self, state, message, objective):
         system_prompt = f"""
         You are an objective selector for a scam-detection system.
         TASK:
@@ -123,28 +153,34 @@ class LLMService:
 
         Output ONLY the objective word.
         """
-        messages = [{"role": "system", "content": system_prompt}]
-    
+        
         # Add history
         history = state.get("history", [])
+        messages = [{"role": "system", "content": system_prompt}]
         for turn in history[-10:]: 
             messages.append({"role": "user", "content": turn["user"]})
             messages.append({"role": "assistant", "content": turn["agent"]})
         
         # Add current message
         messages.append({"role": "user", "content": message})
-        try:
-            response = self.client.chat.completions.create(
+        
+        def _request(client):
+            response = client.chat.completions.create(
                 model=self.fast_model,
                 messages=messages,
                 temperature=0.0
             )
             data = response.choices[0].message.content.strip().lower() # normalized to lower
             return data
+
+        try:
+            # Although currently unused in Planner, we update it for completeness
+            return self._call_groq("gen", _request)
         except Exception as e:
             print(f"❌ LLM Classification Error: {e}")
             return "upi" # Default fallback
-    def generate_response(      ###### ARHAN CHANGED
+
+    def generate_response(
             self, 
             history: list, 
             persona_style: str, 
@@ -196,19 +232,22 @@ class LLMService:
     # Add current message
         messages.append({"role": "user", "content": scammer_text})
 
-        try:
-            response = self.client.chat.completions.create(
+        def _request(client):
+            response = client.chat.completions.create(
                 model=self.main_model,
                 messages=messages,
                 temperature=0.8
             )
             return response.choices[0].message.content.strip()
+
+        try:
+            return self._call_groq("gen", _request)
         except Exception as e:
             print(f"❌ LLM Generation Error: {e}")
             return "Oh dear, I seem to be having trouble with my phone currently."
 
 
-    def safety_check(self, response_text: str) -> bool: #CHANGED
+    def safety_check(self, response_text: str) -> bool:
         """
         Checks if the generated response reveals AI nature or sensitive info.
         """
@@ -229,13 +268,17 @@ class LLMService:
         
         If ANY of these are true, say "UNSAFE". Otherwise say "SAFE".
         """
-        try:
-            res = self.client.chat.completions.create(
+        
+        def _request(client):
+            res = client.chat.completions.create(
                 model=self.fast_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0
             )
             return "SAFE" in res.choices[0].message.content.strip().upper()
+
+        try:
+            return self._call_groq("safe", _request)
         except Exception:
             return True
 
@@ -353,20 +396,24 @@ class LLMService:
         3) DO NOT output advice, explanations, scam analysis, urgency/threat words, or any "patterns" like phishing/social engineering.
         4) DO NOT guess. DO NOT invent. If you are not sure, output: Nothing new found
         """
-        try:
-            response = self.client.chat.completions.create(
+        
+        def _request(client):
+            response = client.chat.completions.create(
                 model=self.main_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0
             )
-            output = response.choices[0].message.content.strip()
+            return response.choices[0].message.content.strip()
+
+        try:
+            output = self._call_groq("extraction", _request)
             
             if "Nothing new found" in output:
                 return {}
             
             # Parse the output
             extracted = {}
-            lines = output.split('\n')
+            lines = output.split('\\n')
             for line in lines:
                 if ':' in line:
                     key, value = line.split(':', 1)

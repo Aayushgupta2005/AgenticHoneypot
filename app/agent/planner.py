@@ -44,17 +44,17 @@ class StrategicPlanner:
 
         # 2. SELECT NEW FOCUS (If needed)
         if not current_focus:
-            # for goal in self.priority_list:
-            #     goal_state = targets.get(goal)
-            #     # Find the first one that is NOT success and NOT failure
-            #     if goal_state["state"] not in ["success", "failure"]:
-            #         current_focus = goal
-            #         targets[current_focus]["state"] = "initialized"
-            #         break
+            for goal in self.priority_list:
+                goal_state = targets.get(goal)
+                # Find the first one that is NOT success and NOT failure
+                if goal_state["state"] not in ["success", "failure"]:
+                    current_focus = goal
+                    targets[current_focus]["state"] = "initialized"
+                    break
 
-            current_focus = llm_service.get_instruction_from_llm(state, incoming_text, objective=["upi","bank_account","url","phone","email","ifsc"])
-            targets[current_focus]["state"] = "initialized"
-            targets[current_focus]["remaining_iterations"] = 3
+            # current_focus = llm_service.get_instruction_from_llm(state, incoming_text, objective=["upi","bank_account","url","phone","email","ifsc"])
+            # targets[current_focus]["state"] = "initialized"
+            # targets[current_focus]["remaining_iterations"] = 3
             instruction = self._get_instruction_text(current_focus)
         
         # 3. GENERATE INSTRUCTION FOR LLM
