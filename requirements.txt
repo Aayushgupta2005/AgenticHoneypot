@@ -6,9 +6,7 @@ pydantic
 python-dotenv
 requests
 regex
-<<<<<<< HEAD
-groq
-=======
 groq
 huggingface_hub
->>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
+groq
+huggingface_hub

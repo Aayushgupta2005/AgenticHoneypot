@@ -3,11 +3,10 @@ from groq import Groq
 from app.core.config import settings
 import json
 import random
-<<<<<<< HEAD
-=======
 from huggingface_hub import InferenceClient
 from huggingface_hub.errors import HfHubHTTPError
->>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
+from huggingface_hub import InferenceClient
+from huggingface_hub.errors import HfHubHTTPError
 
 class LLMService:
     def __init__(self):
@@ -15,32 +14,6 @@ class LLMService:
         self.main_model = "openai/gpt-oss-20b" 
         self.fast_model = "openai/gpt-oss-20b"
 
-<<<<<<< HEAD
-    def classify_scam(self, text: str) -> bool:
-        """
-        Determines if the message is a scam attempt or safe.
-        """
-        prompt = f"""
-        Analyze the following message and determine if it is a SCAM or SAFE.
-        SCAM includes: fraud, phishing, urgency, threats, fake offers, lottery, KYC updates.
-        SAFE includes: greetings, normal questions, non-suspicious chat.
-        
-        Message: "{text}"
-        
-        Respond with ONLY one word: "SCAM" or "SAFE".
-        """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.fast_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0
-            )
-            data = response.choices[0].message.content.strip().upper()
-            return "SCAM" in data
-        except Exception as e:
-            print(f"❌ LLM Classification Error: {e}")
-            return True # Fail safe
-=======
     # def classify_scam(self, text: str) -> bool:
         
     #     """
@@ -109,7 +82,6 @@ class LLMService:
 
         # all keys failed → fail safe
         return True
->>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
 
     def generate_response(
         self, 
@@ -190,7 +162,6 @@ class LLMService:
         ]
         return random.choice(personas)
 
-<<<<<<< HEAD
     def extract_unknown_entities(self, text: str, known_keys_str: str) -> dict:
         """
         Extracts new or unknown entities using LLM that regex might have missed.
@@ -244,6 +215,4 @@ class LLMService:
             print(f"❌ LLM Extraction Error: {e}")
             return {}
 
-=======
->>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
 llm_service = LLMService()
