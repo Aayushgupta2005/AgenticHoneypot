@@ -6,3 +6,5 @@ pydantic
 python-dotenv
 requests
 regex
+groq
+huggingface_hub
