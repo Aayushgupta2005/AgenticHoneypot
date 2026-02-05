@@ -3,6 +3,8 @@ from groq import Groq
 from app.core.config import settings
 import json
 import random
+from huggingface_hub import InferenceClient
+from huggingface_hub.errors import HfHubHTTPError
 
 class LLMService:
     def __init__(self):
@@ -10,30 +12,74 @@ class LLMService:
         self.main_model = "openai/gpt-oss-20b" 
         self.fast_model = "openai/gpt-oss-20b"
 
-    def classify_scam(self, text: str) -> bool:
-        """
-        Determines if the message is a scam attempt or safe.
-        """
-        prompt = f"""
-        Analyze the following message and determine if it is a SCAM or SAFE.
-        SCAM includes: fraud, phishing, urgency, threats, fake offers, lottery, KYC updates.
-        SAFE includes: greetings, normal questions, non-suspicious chat.
+    # def classify_scam(self, text: str) -> bool:
         
-        Message: "{text}"
+    #     """
+    #     Determines if the message is a scam attempt or safe.
+    #     """
+    #     prompt = f"""
+    #     Analyze the following message and determine if it is a SCAM or SAFE.
+    #     SCAM includes: fraud, phishing, urgency, threats, fake offers, lottery, KYC updates.
+    #     SAFE includes: greetings, normal questions, non-suspicious chat.
         
-        Respond with ONLY one word: "SCAM" or "SAFE".
+    #     Message: "{text}"
+        
+    #     Respond with ONLY one word: "SCAM" or "SAFE".
+    #     """
+    #     try:
+    #         response = self.client.chat.completions.create(
+    #             model=self.fast_model,
+    #             messages=[{"role": "user", "content": prompt}],
+    #             temperature=0.0
+    #         )
+    #         data = response.choices[0].message.content.strip().upper()
+    #         return "SCAM" in data
+    #     except Exception as e:
+    #         print(f"❌ LLM Classification Error: {e}")
+    #         return True # Fail safe
+
+    def classify_scam(self,text: str) -> bool:
         """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.fast_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0
-            )
-            data = response.choices[0].message.content.strip().upper()
-            return "SCAM" in data
-        except Exception as e:
-            print(f"❌ LLM Classification Error: {e}")
-            return True # Fail safe
+        Returns True if message is likely a scam.
+        Fail-safe: returns True if classification fails.
+        """
+        HF_KEYS = [
+            settings.HG_KEY1,
+            settings.HG_KEY2,
+        ]
+
+        MODEL = "dima806/email-spam-detection-roberta"
+        THRESHOLD = 0.5
+
+        for key in HF_KEYS:
+            try:
+                client = InferenceClient(
+                    provider="hf-inference",
+                    api_key=key
+                )
+
+                result = client.text_classification(
+                    text,
+                    model=MODEL
+                )
+
+                scam_prob = (
+                    result[0].score
+                    if result[0].label.lower() == "spam"
+                    else result[1].score
+                )
+
+                return scam_prob > THRESHOLD
+
+            except HfHubHTTPError:
+                # try next key
+                continue
+            except Exception:
+                # any unexpected error → fail safe
+                return True
+
+        # all keys failed → fail safe
+        return True
 
     def generate_response(
         self, 

@@ -69,7 +69,11 @@ class AgentBrain:
         if not state["scam_confirmed"]:
             is_scam = llm_service.classify_scam(incoming_text)
             if is_scam:
-                state["scam_confirmed"] = True
+                state[""] = True
+                self.sessions.update_one(
+                    {"_id": session_id},
+                    {"$set": {"scam_confirmed": True}}
+                )
                 print(f"🚨 [BRAIN] Scam Detected in session {session_id}")
             else:
                 # If NOT a scam yet, just chat normally
