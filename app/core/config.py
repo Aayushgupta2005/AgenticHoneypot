@@ -19,6 +19,11 @@ class Settings:
     GUVI_API_KEY: str = os.getenv("GUVI_API_KEY")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
+<<<<<<< HEAD
 
+=======
+    HG_KEY1: str = os.getenv("HG_KEY1")
+    HG_KEY2: str = os.getenv("HG_KEY2")
+>>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
 # Create a single instance to import elsewhere
 settings = Settings()

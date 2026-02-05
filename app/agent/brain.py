@@ -18,7 +18,11 @@ class AgentBrain:
 
         if not current_state:
             # Pick a persona at start
+<<<<<<< HEAD
             selected_persona = llm_service.generate_persona()
+=======
+            selected_persona = "llm_service.generate_persona()"
+>>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
             
             current_state = {
                 "_id": session_id,
@@ -51,7 +55,11 @@ class AgentBrain:
             
         return current_state
 
+<<<<<<< HEAD
     def process_turn(self, session_id: str, incoming_text: str, background_tasks=None) -> str:
+=======
+    def process_turn(self, session_id: str, incoming_text: str) -> str:
+>>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
         """
         Orchestrates the entire turn:
         1. Load State
@@ -69,7 +77,15 @@ class AgentBrain:
         if not state["scam_confirmed"]:
             is_scam = llm_service.classify_scam(incoming_text)
             if is_scam:
+<<<<<<< HEAD
                 state["scam_confirmed"] = True
+=======
+                state[""] = True
+                self.sessions.update_one(
+                    {"_id": session_id},
+                    {"$set": {"scam_confirmed": True}}
+                )
+>>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
                 print(f"🚨 [BRAIN] Scam Detected in session {session_id}")
             else:
                 # If NOT a scam yet, just chat normally
@@ -91,6 +107,7 @@ class AgentBrain:
         intel = RegexSpy.extract_intelligence(incoming_text)
         self._update_intelligence(state, intel)
 
+<<<<<<< HEAD
         # --- 1.5. SPY: Background LLM Extraction ---
         # We run this in background so we don't block the main response
         if background_tasks:
@@ -101,6 +118,8 @@ class AgentBrain:
             # Choosing to just print warning and skip to maintain speed as requested.
             print("⚠️ [BRAIN] No background_tasks object provided. Skipping LLM extraction.")
 
+=======
+>>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
         ####3 check whether to stop or not 
 
         # --- 3. PLAN STRATEGY ---
@@ -147,6 +166,7 @@ class AgentBrain:
 
         return reply
 
+<<<<<<< HEAD
     def run_background_extraction(self, session_id: str, text: str):
         """
         Runs the LLM-based entity extraction in the background.
@@ -171,11 +191,14 @@ class AgentBrain:
         else:
             print(f"ℹ️ [BRAIN] Background extraction finished. Nothing new found.")
 
+=======
+>>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
     def _update_intelligence(self, state, intel):
         """Updates internal state with findings from RegexSpy."""
         updates = {}
         has_new_data = False
         
+<<<<<<< HEAD
         # Define standard keys that have their own dedicated fields
         STANDARD_KEYS = ["upi", "bank_account", "ifsc", "phone", "url", "email", "suspicious_keywords"]
         
@@ -229,6 +252,32 @@ class AgentBrain:
                         if obj not in existing:
                             existing.append(obj)
                     state["extracted_data"]["dynamic_intel"] = existing
+=======
+        for key, new_values in intel.items():
+            if not new_values: continue
+            
+            # Key in DB might differ slightly or be same
+            db_key = key # Schema matches mostly
+            if key == "suspicious_keywords": db_key = "suspicious_keywords" # matches
+            
+            # Simple list extension
+            existing = state["extracted_data"].get(db_key, [])
+            # Avoid duplicates
+            clean_new = [v for v in new_values if v not in existing]
+            
+            if clean_new:
+                has_new_data = True
+                updates[f"extracted_data.{db_key}"] = existing + clean_new
+                print(f"🕵️ [BRAIN] Captured new {key}: {clean_new}")
+
+        if has_new_data:
+            self.sessions.update_one({"_id": state["_id"]}, {"$set": updates})
+            # Also update local state object for this turn
+            for k, v in updates.items():
+                # k is like "extracted_data.upi", v is the new list
+                field = k.split(".")[1]
+                state["extracted_data"][field] = v
+>>>>>>> 3e3409570b3fb0c97f6e1f8dd95aefd445babdf5
 
     def save_interaction(self, session_id, user_text, agent_text):
         """Saves the chat turn to history"""
