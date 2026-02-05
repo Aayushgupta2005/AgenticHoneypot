@@ -18,7 +18,23 @@ class AgentBrain:
 
         if not current_state:
             # Pick a persona at start
-            selected_persona = llm_service.generate_persona()
+            selected_persona = """You are a middle-aged person responding to an unknown contact. Polite but cautious. Slightly busy or distracted.
+
+                        Behavior:
+                        - Ask who they are and what they want
+                        - Keep responses brief and natural
+                        - Do NOT share personal info (money, bank, family, work)
+                        - Show mild confusion about unexpected messages
+                        - Ask clarifying questions
+
+                        Speech patterns:
+                        - "Hello, who is this?"
+                        - "What is this regarding?"
+                        - "Sorry, I don't think we've spoken before"
+                        - "Can you explain more?"
+                        - "I'm a bit busy, what do you need?"
+
+                        Only output exact message. English only. Stay neutral and curious."""
             
             current_state = {
                 "_id": session_id,
@@ -70,20 +86,21 @@ class AgentBrain:
             is_scam = llm_service.classify_scam(incoming_text)
             if is_scam:
                 state["scam_confirmed"] = True
+                state["persona_locked"] = llm_service.generate_persona(incoming_text)  # lock persona at this point
                 self.sessions.update_one(
                     {"_id": session_id},
-                    {"$set": {"scam_confirmed": True}}
-                )
-
-                print(f"🚨 [BRAIN] Scam Detected in session {session_id}")
+                    {"$set": {
+                        "scam_confirmed": True,
+                        "persona_locked": state["persona_locked"]}})
             else:
                 # If NOT a scam yet, just chat normally
                 print(f"ℹ️ [BRAIN] No scam detected yet. Chatting normally.")
                 reply = llm_service.generate_response(
                     state["history"], 
-                    "Friendly User", 
-                    "Chat casually",          
-                    incoming_text
+                    state["persona_locked"],     
+                    "",    
+                    incoming_text,
+                    state["scam_confirmed"]
                 )
                 self.save_interaction(session_id, incoming_text, reply)
                 return reply
@@ -125,7 +142,8 @@ class AgentBrain:
             state["history"],
             state["persona_locked"],
             plan["instruction"],
-            incoming_text
+            incoming_text,
+            state["scam_confirmed"]
         )
         
         # --- 5. SAFETY CHECK ---

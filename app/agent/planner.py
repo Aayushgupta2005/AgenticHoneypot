@@ -87,7 +87,10 @@ class StrategicPlanner:
         prompts = {
             "upi": "OBJECTIVE: Ask for their UPI ID (e.g., GooglePay/PhonePe) so you can send money.",
             "bank_account": "OBJECTIVE: Ask for their Bank Account Number and IFSC code.",
+            "ifsc": "OBJECTIVE: Ask them to confirm or resend the IFSC code due to a bank validation issue.",
+            "phone": "OBJECTIVE: Ask for their phone/WhatsApp number to coordinate the payment or call for confirmation.",
             "url": "OBJECTIVE: Ask for a payment link or QR code.",
+            "email": "OBJECTIVE: Ask for their email ID to send a payment receipt or confirmation.",
             "ip": "OBJECTIVE: Send them the 'Payment Receipt' link (Canary Token) and ask them to verify it."
         }
         return prompts.get(focus, "OBJECTIVE: Chat normally.")
