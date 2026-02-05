@@ -109,8 +109,9 @@ class AgentBrain:
         
         
         # If we are here, SCAM IS CONFIRMED.
-        # --- 1. SPY: Regex Extraction ---
-        intel = RegexSpy.extract_intelligence(incoming_text)
+        # --- 1. EXTRACT INFORMATION (LLM Based) ---
+        # Replaces old RegexSpy logic
+        intel = llm_service.extract_information(incoming_text)
         self._update_intelligence(state, intel)
 
         # --- 1.5. SPY: Background LLM Extraction ---
