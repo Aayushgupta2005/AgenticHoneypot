@@ -375,22 +375,24 @@ class LLMService:
         Uses 'extraction' key pool.
         """
         prompt = f"""
-        You are an advanced entity extractor.
-        User Message: "{text}"
+        Extract ALL personal and organizational details from this scammer conversation. Return ONLY a JSON dictionary with no additional text.
 
-        Extract specific details if present. Return a JSON object with these exact keys:
-        - "upi": List of UPI IDs found (e.g. user@bank)
-        - "bank_account": List of Account Numbers
-        - "ifsc": List of IFSC Codes
-        - "phone": List of Phone Numbers
-        - "email": List of Email Addresses
-        - "url": List of Links found
-        
-        Rules:
-        - Be smart. "my upi is abc@okicici" -> extract "abc@okicici".
-        - Returns LISTS for each key.
-        - If nothing found for a key, return empty list [].
-        - Output ONLY valid JSON.
+FIELDS TO EXTRACT:
+employee_id, employee_number, upi_id, bank_name, branch_code, branch_name, branch_registration_number, account_number, ifsc_code, name, phone_number, alternate_phone_number, email, address, city, state, pincode, company_name, department, designation, manager_name, office_address, website, pan_number, aadhaar_number, date_of_birth, gender, payment_links, qr_code_references, amounts_mentioned, transaction_ids, additional_details
+
+RULES:
+- Extract only explicitly stated information
+- Use null for missing fields
+- Include ALL fields listed above
+- Capture partial information if available
+- If multiple values exist, use a list
+- Return valid JSON only - no explanations, no markdown, no code blocks
+
+OUTPUT FORMAT:
+{"employee_id": "value or null", "employee_number": "value or null", ...}
+
+CONVERSATION:
+{text}
         """
         
         def _request(client):
