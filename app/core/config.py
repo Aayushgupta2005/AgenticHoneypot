@@ -21,5 +21,7 @@ class Settings:
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     HG_KEY1: str = os.getenv("HG_KEY1")
     HG_KEY2: str = os.getenv("HG_KEY2")
+    HG_KEY1: str = os.getenv("HG_KEY1")
+    HG_KEY2: str = os.getenv("HG_KEY2")
 # Create a single instance to import elsewhere
 settings = Settings()

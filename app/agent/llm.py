@@ -5,6 +5,8 @@ import json
 import random
 from huggingface_hub import InferenceClient
 from huggingface_hub.errors import HfHubHTTPError
+from huggingface_hub import InferenceClient
+from huggingface_hub.errors import HfHubHTTPError
 
 class LLMService:
     def __init__(self):
@@ -159,5 +161,58 @@ class LLMService:
             "Skeptical but Greedy: Suspicious but really wants the money/prize."
         ]
         return random.choice(personas)
+
+    def extract_unknown_entities(self, text: str, known_keys_str: str) -> dict:
+        """
+        Extracts new or unknown entities using LLM that regex might have missed.
+        """
+        prompt = f"""
+        You are a strict "NEW ENTITY" extractor.
+
+        Known entity types already covered by my regex system:
+        {known_keys_str}
+
+        User message:
+        {text}
+
+        Task:
+        - Look ONLY for concrete identifiers that are NOT covered by the known entity types above.
+        - Examples of "concrete identifiers": OTP codes, Aadhaar/PAN, credit/debit card numbers, CVV, expiry dates,
+          login credentials, transaction IDs, order IDs, wallet IDs, QR payloads, crypto wallet addresses, IMEI, etc.
+
+        Output rules (VERY IMPORTANT):
+        1) If you find ANY new concrete identifier not in the known list, output ONLY in this format:
+           <entity_name>: <exact_value_from_message>
+           (one per line)
+        2) If you do NOT find anything new, output EXACTLY:
+           Nothing new found
+        3) DO NOT output advice, explanations, scam analysis, urgency/threat words, or any "patterns" like phishing/social engineering.
+        4) DO NOT guess. DO NOT invent. If you are not sure, output: Nothing new found
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.main_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0
+            )
+            output = response.choices[0].message.content.strip()
+            
+            if "Nothing new found" in output:
+                return {}
+            
+            # Parse the output
+            extracted = {}
+            lines = output.split('\n')
+            for line in lines:
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip().lower().replace(" ", "_")
+                    value = value.strip()
+                    extracted[key] = [value] # List format to be consistent with Brain schema
+            
+            return extracted
+        except Exception as e:
+            print(f"❌ LLM Extraction Error: {e}")
+            return {}
 
 llm_service = LLMService()

@@ -8,3 +8,5 @@ requests
 regex
 groq
 huggingface_hub
+groq
+huggingface_hub
