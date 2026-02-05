@@ -153,8 +153,9 @@ class AgentBrain:
             reply = llm_service.generate_response(   # implement a threshhold of say 3 
                 state["history"],
                 state["persona_locked"],
-                "Previous reply was unsafe. Be safer.",   # update with the  error from safety check 
-                incoming_text
+                "Previous reply was unsafe. Be safer." + plan["instruction"],   # update with the  error from safety check 
+                incoming_text,
+                state["scam_confirmed"]
             )
 
         # --- 6. SAVE INTERACTION ---
