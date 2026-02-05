@@ -126,7 +126,7 @@ class AgentBrain:
         ####3 check whether to stop or not 
 
         # --- 3. PLAN STRATEGY ---
-        plan = planner_service.update_and_get_focus(state)
+        plan = planner_service.update_and_get_focus(state, incoming_text)
         
         # Save updated plan state to DB
         self.sessions.update_one(

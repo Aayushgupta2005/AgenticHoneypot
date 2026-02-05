@@ -97,7 +97,53 @@ class LLMService:
     #     # only if ALL keys failed
     #     print("Failed to classify scam")
     #     return True
+    def get_instruction_from_llm(self, state,message,objective):
+        system_prompt = f"""
+        You are an objective selector for a scam-detection system.
+        TASK:
+        Based on the conversation history and the latest message, decide the ONE most relevant objective to focus on next.
 
+        ALLOWED OBJECTIVES (choose exactly ONE):
+        upi
+        bank_account
+        ifsc
+        phone
+        email
+        url
+
+
+        RULES (MANDATORY):
+        - You must output EXACTLY ONE word.
+        - The word MUST be one of the ALLOWED OBJECTIVES.
+        - Do NOT explain your answer.
+        - Do NOT add punctuation, quotes, spaces, or newlines.
+        - Do NOT invent information.
+        - Use chat history as the only truth.
+        - Choose the objective that best matches the scammer current intent.
+
+        Output ONLY the objective word.
+        """
+        messages = [{"role": "system", "content": system_prompt}]
+    
+        # Add history
+        history = state.get("history", [])
+        for turn in history[-10:]: 
+            messages.append({"role": "user", "content": turn["user"]})
+            messages.append({"role": "assistant", "content": turn["agent"]})
+        
+        # Add current message
+        messages.append({"role": "user", "content": message})
+        try:
+            response = self.client.chat.completions.create(
+                model=self.fast_model,
+                messages=messages,
+                temperature=0.0
+            )
+            data = response.choices[0].message.content.strip().lower() # normalized to lower
+            return data
+        except Exception as e:
+            print(f"❌ LLM Classification Error: {e}")
+            return "upi" # Default fallback
     def generate_response(      ###### ARHAN CHANGED
             self, 
             history: list, 
@@ -125,6 +171,7 @@ class LLMService:
     (eg. get scammer upi ID, get scammer account number) 
     Get the objective information by prompting the scammer to share the details by tricking them while sticking to the persona.
     If objective is blank, just chat normally. 
+    Analyse the situation properly, don't go straight up for the objective, first handle the current situation and try to direct the conversation towards the objective.
     Persona description (use EXACT traits, typing style, phrases, goal):
     {persona_style}
 

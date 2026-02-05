@@ -1,3 +1,4 @@
+from app.agent.llm import llm_service
 class StrategicPlanner:
     def __init__(self):
         # Priority Order: What do we want most?
@@ -7,8 +8,7 @@ class StrategicPlanner:
             "url", 
             "ip"
         ]
-
-    def update_and_get_focus(self, state):
+    def update_and_get_focus(self, state, incoming_text):
         """
         Analyzes the granular state, updates iterations, and decides 
         the current tactical objective.
@@ -44,16 +44,22 @@ class StrategicPlanner:
 
         # 2. SELECT NEW FOCUS (If needed)
         if not current_focus:
-            for goal in self.priority_list:
-                goal_state = targets.get(goal)
-                # Find the first one that is NOT success and NOT failure
-                if goal_state["state"] not in ["success", "failure"]:
-                    current_focus = goal
-                    targets[current_focus]["state"] = "initialized"
-                    break
+            # for goal in self.priority_list:
+            #     goal_state = targets.get(goal)
+            #     # Find the first one that is NOT success and NOT failure
+            #     if goal_state["state"] not in ["success", "failure"]:
+            #         current_focus = goal
+            #         targets[current_focus]["state"] = "initialized"
+            #         break
+
+            current_focus = llm_service.get_instruction_from_llm(state, incoming_text, objective=["upi","bank_account","url","phone","email","ifsc"])
+            targets[current_focus]["state"] = "initialized"
+            targets[current_focus]["remaining_iterations"] = 3
+            instruction = self._get_instruction_text(current_focus)
         
         # 3. GENERATE INSTRUCTION FOR LLM
-        instruction = self._get_instruction_text(current_focus)
+        # instruction = self._get_instruction_text(current_focus)
+        instruction = ""
 
         # Return updated sub-state and the prompt instruction
         return {
@@ -83,9 +89,9 @@ class StrategicPlanner:
         """Returns the specific prompt for the LLM"""
         if not focus:
             return "OBJECTIVE: Stall for time. Ask generic questions."
-            
+            # but aso analyse the current scenario , for example if the scammer is asking for otp and you just ask for upi because you are searching for it then it will be a wrong move so please first handle this then ask for upi
         prompts = {
-            "upi": "OBJECTIVE: Ask for their UPI ID (e.g., GooglePay/PhonePe) so you can send money.",
+            "upi": "OBJECTIVE: Ask for their UPI ID (e.g., GooglePay/PhonePe) so you can send money. ",
             "bank_account": "OBJECTIVE: Ask for their Bank Account Number and IFSC code.",
             "ifsc": "OBJECTIVE: Ask them to confirm or resend the IFSC code due to a bank validation issue.",
             "phone": "OBJECTIVE: Ask for their phone/WhatsApp number to coordinate the payment or call for confirmation.",
