@@ -18,7 +18,7 @@ class AgentBrain:
 
         if not current_state:
             # Pick a persona at start
-            selected_persona = "llm_service.generate_persona()"
+            selected_persona = llm_service.generate_persona()
             
             current_state = {
                 "_id": session_id,
