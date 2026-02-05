@@ -198,6 +198,23 @@ class AgentBrain:
 
     def _update_intelligence(self, state, intel):
         """Updates internal state with findings from RegexSpy."""
+        
+        # --- NORMALIZE INTEL ---
+        # LLM might return None (null) or single values. Conver strictly to lists.
+        clean_intel = {}
+        for k, v in intel.items():
+            if v in [None, "", [], {}]: continue
+            if not isinstance(v, list):
+                clean_intel[k] = [v]
+            else:
+                # Filter out None inside lists too if any
+                valid_items = [x for x in v if x not in [None, ""]]
+                if valid_items:
+                    clean_intel[k] = valid_items
+        
+        intel = clean_intel
+        # -----------------------
+
         updates = {}
         has_new_data = False
         
