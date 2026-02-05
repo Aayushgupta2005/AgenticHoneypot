@@ -1,0 +1,10 @@
+--- Testing Scam Classification ---
+HG_KEY1 present: True
+HG_KEY2 present: True
+Testing Scam Text: 'Urgent: Your account is blocked. Verify KYC immediately by clicking here: http://bit.ly/scam'
+Result: SCAM
+✅ Scam detected correctly.
+
+Testing Safe Text: 'Hi grandma, how are you doing today? I missed your call.'
+Result: SCAM
+❌ Safe text flagged as scam.

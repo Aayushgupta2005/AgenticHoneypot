@@ -14,74 +14,90 @@ class LLMService:
         self.main_model = "openai/gpt-oss-20b" 
         self.fast_model = "openai/gpt-oss-20b"
 
+    def classify_scam(self, text: str) -> bool:
+        
+        """
+        Determines if the message is a scam attempt or safe.
+        """
+        prompt = f"""
+        You are a cybersecurity classifier.
+
+        Classify the message as SCAM or SAFE.
+        If uncertain, choose SCAM.
+
+        SCAM if it shows:
+        - phishing/suspicious links
+        - asks for OTP/password/bank/KYC/ID/card info
+        - urgency, threats, fear, or pressure
+        - requests money, fees, transfers, or moving chat off-platform
+        - any manipulation for money or sensitive data
+
+        SAFE if normal greeting, casual chat, or harmless info with no data/money request.
+
+        Analyze intent and risk, not just keywords.
+
+        Return ONLY:
+        {"label":"SCAM or SAFE","confidence":0-100,"reason":"short"}
+        
+        Message: "{text}"
+        
+        Respond with ONLY one word: "SCAM" or "SAFE".
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.fast_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0
+            )
+            data = response.choices[0].message.content.strip().upper()
+            return "SCAM" in data
+        except Exception as e:
+            print(f"❌ LLM Classification Error: {e}")
+            return True # Fail safe
+
     # def classify_scam(self, text: str) -> bool:
-        
     #     """
-    #     Determines if the message is a scam attempt or safe.
+    #     Returns True if message is likely a scam.
+    #     Fail-safe: returns True if ALL keys fail.
     #     """
-    #     prompt = f"""
-    #     Analyze the following message and determine if it is a SCAM or SAFE.
-    #     SCAM includes: fraud, phishing, urgency, threats, fake offers, lottery, KYC updates.
-    #     SAFE includes: greetings, normal questions, non-suspicious chat.
-        
-    #     Message: "{text}"
-        
-    #     Respond with ONLY one word: "SCAM" or "SAFE".
-    #     """
-    #     try:
-    #         response = self.client.chat.completions.create(
-    #             model=self.fast_model,
-    #             messages=[{"role": "user", "content": prompt}],
-    #             temperature=0.0
-    #         )
-    #         data = response.choices[0].message.content.strip().upper()
-    #         return "SCAM" in data
-    #     except Exception as e:
-    #         print(f"❌ LLM Classification Error: {e}")
-    #         return True # Fail safe
 
-    def classify_scam(self,text: str) -> bool:
-        """
-        Returns True if message is likely a scam.
-        Fail-safe: returns True if classification fails.
-        """
-        HF_KEYS = [
-            settings.HG_KEY1,
-            settings.HG_KEY2,
-        ]
+    #     HF_KEYS = [
+    #         settings.HG_KEY1,
+    #         settings.HG_KEY2,
+    #     ]
 
-        MODEL = "dima806/email-spam-detection-roberta"
-        THRESHOLD = 0.5
+    #     MODEL = "dima806/email-spam-detection-roberta"
+    #     THRESHOLD = 0.5
 
-        for key in HF_KEYS:
-            try:
-                client = InferenceClient(
-                    provider="hf-inference",
-                    api_key=key
-                )
+    #     for key in HF_KEYS:
+    #         try:
+    #             client = InferenceClient(
+    #                 provider="hf-inference",
+    #                 api_key=key
+    #             )
 
-                result = client.text_classification(
-                    text,
-                    model=MODEL
-                )
+    #             result = client.text_classification(
+    #                 text,
+    #                 model=MODEL
+    #             )
 
-                scam_prob = (
-                    result[0].score
-                    if result[0].label.lower() == "spam"
-                    else result[1].score
-                )
+    #             # robust label search
+    #             scam_prob = next(
+    #                 (r.score for r in result if r.label.lower() == "spam"),
+    #                 0.0
+    #             )
 
-                return scam_prob > THRESHOLD
+    #             return scam_prob > THRESHOLD
 
-            except HfHubHTTPError:
-                # try next key
-                continue
-            except Exception:
-                # any unexpected error → fail safe
-                return True
+    #         except HfHubHTTPError:
+    #             continue
+    #         except Exception:
+    #             continue   # don't auto-scam
 
-        # all keys failed → fail safe
-        return True
+    #     # only if ALL keys failed
+    #     print("Failed to classify scam")
+    #     return True
+
 
     def generate_response(
         self, 

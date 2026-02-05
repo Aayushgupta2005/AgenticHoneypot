@@ -70,7 +70,6 @@ class AgentBrain:
             is_scam = llm_service.classify_scam(incoming_text)
             if is_scam:
                 state["scam_confirmed"] = True
-                state[""] = True
                 self.sessions.update_one(
                     {"_id": session_id},
                     {"$set": {"scam_confirmed": True}}

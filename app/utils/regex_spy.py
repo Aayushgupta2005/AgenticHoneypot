@@ -77,4 +77,4 @@ class RegexSpy:
             extracted["suspicious_keywords"] = suspicious
 
         return extracted
-        }
+        
