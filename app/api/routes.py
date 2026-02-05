@@ -31,7 +31,7 @@ async def chat_endpoint(
 
     # 2. Delegate Logic to Brain
     # The brain now handles everything: State, Scam Check, Planning, Generation, History
-    agent_reply = brain_service.process_turn(request.sessionId, request.message.text)
+    agent_reply = brain_service.process_turn(request.sessionId, request.message.text, background_tasks)
     
     # 3. Save (Already done inside process_turn, but just ensuring no double save if legacy code existed)
     # brain_service.save_interaction(request.sessionId, incoming_text, agent_reply)

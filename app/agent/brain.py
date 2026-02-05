@@ -51,7 +51,7 @@ class AgentBrain:
             
         return current_state
 
-    def process_turn(self, session_id: str, incoming_text: str) -> str:
+    def process_turn(self, session_id: str, incoming_text: str, background_tasks=None) -> str:
         """
         Orchestrates the entire turn:
         1. Load State
@@ -90,6 +90,16 @@ class AgentBrain:
         # --- 1. SPY: Regex Extraction ---
         intel = RegexSpy.extract_intelligence(incoming_text)
         self._update_intelligence(state, intel)
+
+        # --- 1.5. SPY: Background LLM Extraction ---
+        # We run this in background so we don't block the main response
+        if background_tasks:
+            background_tasks.add_task(self.run_background_extraction, session_id, incoming_text)
+        else:
+            # Fallback if no background tasks provided (e.g. testing), run sync or skip? 
+            # Ideally skip or run sync. Letting it run sync for safety if needed, or just skip to keep speed.
+            # Choosing to just print warning and skip to maintain speed as requested.
+            print("⚠️ [BRAIN] No background_tasks object provided. Skipping LLM extraction.")
 
         ####3 check whether to stop or not 
 
@@ -137,35 +147,88 @@ class AgentBrain:
 
         return reply
 
+    def run_background_extraction(self, session_id: str, text: str):
+        """
+        Runs the LLM-based entity extraction in the background.
+        """
+        # Get known keys from RegexSpy to pass to LLM
+        known_keys = list(RegexSpy.REGEX_PATTERNS.keys())
+        known_keys_str = ",".join(known_keys)
+        
+        print(f"🕵️ [BRAIN] Starting background LLM extraction for session {session_id}...")
+        
+        extra_intel = llm_service.extract_unknown_entities(text, known_keys_str)
+        
+        if extra_intel:
+            # We need to fetch fresh state or just update blindly?
+            # Better to fetch fresh state to ensure we append correctly, or use $addToSet in Mongo
+            # Using _update_intelligence logic but adapting for direct DB update since 'state' might be stale
+            
+            # Re-fetch state just to be safe and reuse _update_intelligence logic cleanly
+            state = self.get_or_create_session(session_id)
+            self._update_intelligence(state, extra_intel)
+            print(f"✅ [BRAIN] Background extraction complete. Found: {extra_intel.keys()}")
+        else:
+            print(f"ℹ️ [BRAIN] Background extraction finished. Nothing new found.")
+
     def _update_intelligence(self, state, intel):
         """Updates internal state with findings from RegexSpy."""
         updates = {}
         has_new_data = False
         
+        # Define standard keys that have their own dedicated fields
+        STANDARD_KEYS = ["upi", "bank_account", "ifsc", "phone", "url", "email", "suspicious_keywords"]
+        
+        # Accumulate dynamic objects to avoid overwriting the update key
+        all_dynamic_objects = []
+
         for key, new_values in intel.items():
             if not new_values: continue
             
-            # Key in DB might differ slightly or be same
-            db_key = key # Schema matches mostly
-            if key == "suspicious_keywords": db_key = "suspicious_keywords" # matches
-            
-            # Simple list extension
-            existing = state["extracted_data"].get(db_key, [])
-            # Avoid duplicates
-            clean_new = [v for v in new_values if v not in existing]
-            
-            if clean_new:
+            if key in STANDARD_KEYS:
+                # Standard field logic
+                db_key = key
+                if f"$addToSet" not in updates:
+                    updates["$addToSet"] = {}
+                
+                updates["$addToSet"][f"extracted_data.{db_key}"] = {"$each": new_values}
                 has_new_data = True
-                updates[f"extracted_data.{db_key}"] = existing + clean_new
-                print(f"🕵️ [BRAIN] Captured new {key}: {clean_new}")
+                print(f"🕵️ [BRAIN] Should add to {db_key}: {new_values}")
+                
+            else:
+                # Dynamic Intel logic (for unknown entity types from LLM)
+                # Convert to objects: {"type": "crypto_wallet", "value": "xyz"}
+                dynamic_objects = [{"type": key, "value": v} for v in new_values]
+                all_dynamic_objects.extend(dynamic_objects)
+                has_new_data = True
+                print(f"🕵️ [BRAIN] Queued for dynamic_intel: {dynamic_objects}")
+
+        # Add accumulated dynamic objects to updates if any
+        if all_dynamic_objects:
+            if f"$addToSet" not in updates:
+                updates["$addToSet"] = {}
+            updates["$addToSet"]["extracted_data.dynamic_intel"] = {"$each": all_dynamic_objects}
 
         if has_new_data:
-            self.sessions.update_one({"_id": state["_id"]}, {"$set": updates})
-            # Also update local state object for this turn
-            for k, v in updates.items():
-                # k is like "extracted_data.upi", v is the new list
-                field = k.split(".")[1]
-                state["extracted_data"][field] = v
+            # Perform the atomic update
+            self.sessions.update_one({"_id": state["_id"]}, updates)
+            
+            # Manually update the local state object so the rest of the turn sees it
+            for key, new_values in intel.items():
+                if key in STANDARD_KEYS:
+                    existing = state["extracted_data"].get(key, [])
+                    combined = list(set(existing + new_values))
+                    state["extracted_data"][key] = combined
+                else:
+                    # For dynamic intel, create objects and append
+                    existing = state["extracted_data"].get("dynamic_intel", [])
+                    new_objs = [{"type": key, "value": v} for v in new_values]
+                    
+                    # Simple duplication check locally
+                    for obj in new_objs:
+                        if obj not in existing:
+                            existing.append(obj)
+                    state["extracted_data"]["dynamic_intel"] = existing
 
     def save_interaction(self, session_id, user_text, agent_text):
         """Saves the chat turn to history"""
